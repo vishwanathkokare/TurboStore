@@ -8,7 +8,7 @@
   },
   "keywords": ["react-native", "storage", "mmkv", "sqlite", "indexeddb", "localstorage"],
   "author": "Vishawanath Kokare",
-  "license": "MIT"
+  "license": "MIT",
   "description": "High-performance & Cross-Platfrom support React Native storage library",
   "dependencies": {
     "sqlite3": "^5.1.7",
