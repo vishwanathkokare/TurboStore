@@ -1,93 +1,69 @@
-const DB_NAME = "TurboStoreDB";
-const STORE_NAME = "keyValueStore";
-const MAX_RETRIES = 3;
-let isIndexedDBAvailable = true;
+const DB_NAME = "TurboStore";
+const STORE_NAME = "storage";
 
-// Open IndexedDB
+let db;
+
 const openDB = () => {
   return new Promise((resolve, reject) => {
+    if (db) return resolve(db);
+
     const request = indexedDB.open(DB_NAME, 1);
+
     request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+      const database = event.target.result;
+      if (!database.objectStoreNames.contains(STORE_NAME)) {
+        database.createObjectStore(STORE_NAME);
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => {
-      console.warn("IndexedDB failed! Falling back to LocalStorage.");
-      isIndexedDBAvailable = false;
-      reject(request.error);
+
+    request.onsuccess = (event) => {
+      db = event.target.result;
+      resolve(db);
+    };
+
+    request.onerror = (event) => {
+      console.error("❌ IndexedDB Open Error:", event.target.error);
+      reject(event.target.error);
     };
   });
 };
 
 const IndexedDBStore = {
   async setItem(key, value) {
-    if (!isIndexedDBAvailable) {
-      localStorage.setItem(key, value);
-      return;
-    }
+    const database = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(value, key);
 
-    let retries = 0;
-    while (retries < MAX_RETRIES) {
-      try {
-        const db = await openDB();
-        const transaction = db.transaction(STORE_NAME, "readwrite");
-        const store = transaction.objectStore(STORE_NAME);
-        store.put(value, key);
-        return;
-      } catch (error) {
-        retries++;
-        console.warn(`IndexedDB Error (Attempt ${retries}):`, error);
-      }
-    }
-
-    // Fallback to LocalStorage if IndexedDB fails
-    console.warn("IndexedDB failed completely! Using LocalStorage.");
-    isIndexedDBAvailable = false;
-    localStorage.setItem(key, value);
+      request.onsuccess = () => resolve();
+      request.onerror = (event) => reject(event.target.error);
+    });
   },
 
   async getItem(key) {
-    if (!isIndexedDBAvailable) {
-      return localStorage.getItem(key);
-    }
+    const database = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, "readonly");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(key);
 
-    try {
-      const db = await openDB();
-      return new Promise((resolve) => {
-        const transaction = db.transaction(STORE_NAME, "readonly");
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(key);
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => resolve(null);
-      });
-    } catch (error) {
-      console.warn("IndexedDB read failed! Falling back to LocalStorage.");
-      isIndexedDBAvailable = false;
-      return localStorage.getItem(key);
-    }
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = (event) => reject(event.target.error);
+    });
   },
 
   async removeItem(key) {
-    if (!isIndexedDBAvailable) {
-      localStorage.removeItem(key);
-      return;
-    }
-
-    try {
-      const db = await openDB();
-      const transaction = db.transaction(STORE_NAME, "readwrite");
+    const database = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, "readwrite");
       const store = transaction.objectStore(STORE_NAME);
-      store.delete(key);
-    } catch (error) {
-      console.warn("IndexedDB delete failed! Falling back to LocalStorage.");
-      isIndexedDBAvailable = false;
-      localStorage.removeItem(key);
-    }
+      const request = store.delete(key);
+
+      request.onsuccess = () => resolve();
+      request.onerror = (event) => reject(event.target.error);
+    });
   },
 };
 
 export default IndexedDBStore;
-        
